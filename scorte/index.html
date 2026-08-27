@@ -191,7 +191,7 @@
     </style>
 </head>
 <body>
-    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v17 · 27/08 🔧</div>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v18 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <div id="inventoryView">
@@ -847,16 +847,24 @@
                         return;
                     }
                 } catch (e) {
+                    stopNativeScanner();
                     if (e && (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')) {
                         document.getElementById('scannerStatus').textContent = "Permesso fotocamera negato. Tocca l'icona del lucchetto (o 'i' info) vicino all'indirizzo del sito in alto, vai su Permessi > Fotocamera > Consenti, poi RICARICA la pagina e riprova.";
                         return;
                     }
-                    /* nessun supporto nativo, proseguo col fallback */
+                    console.error('Scanner nativo non disponibile, passo al metodo alternativo:', e);
+                    /* proseguo col fallback */
                 }
             }
             startFallbackScanner();
         }
         async function startNativeScanner() {
+            const wantedFormats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'];
+            const supportedFormats = await BarcodeDetector.getSupportedFormats();
+            const usableFormats = wantedFormats.filter(f => supportedFormats.includes(f));
+            if (usableFormats.length === 0) throw new Error('Nessun formato barcode supportato');
+            const detector = new BarcodeDetector({ formats: usableFormats });
+
             const video = document.getElementById('nativeScannerVideo');
             video.style.display = 'block';
             document.getElementById('barcode-reader').style.display = 'none';
@@ -867,7 +875,6 @@
             video.srcObject = nativeScanStream;
             await video.play();
             setupZoomControl(nativeScanStream);
-            const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] });
             const loop = async () => {
                 if (!nativeScanStream) return;
                 try {
@@ -985,12 +992,12 @@
             if (!name) { alert("Scrivi prima il nome del prodotto nel campo qui sopra."); return; }
             document.getElementById('modalTitle').textContent = '⏳ Cerco...';
             try {
-                const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(name)}&search_simple=1&action=process&json=1&page_size=6&fields=product_name,brands,ingredients_text,ingredients_text_it,allergens_tags,code`;
+                const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(name)}&page_size=6&fields=product_name,brands,ingredients_text,ingredients_text_it,allergens_tags,code`;
                 const res = await fetch(url);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
-                nameSearchResultsData = (data.products || []).filter(p => p.product_name);
+                nameSearchResultsData = (data.hits || data.products || []).filter(p => p.product_name);
                 if (nameSearchResultsData.length === 0) {
                     alert(`❌ NESSUN RISULTATO: "${name}" non risulta su Open Food Facts. Prova con un nome più generico (es. solo il marchio), oppure inserisci ingredienti/allergeni a mano.`);
                     return;
