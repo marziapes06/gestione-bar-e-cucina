@@ -283,6 +283,7 @@
         <div class="modal">
             <h3 style="color: var(--primary-dark); margin-bottom: 10px;">📷 Inquadra il codice a barre</h3>
             <p class="stock-update-intro">Centra il codice a barre nel riquadro, tienilo dritto (non inclinato) e a circa 10-15 cm di distanza, con buona luce.</p>
+            <video id="nativeScannerVideo" style="width:100%; border-radius:10px; display:none; background:#000;" autoplay playsinline muted></video>
             <div id="barcode-reader" style="width:100%; border-radius:10px; overflow:hidden;"></div>
             <p id="scannerStatus" style="text-align:center; font-size:13px; color:var(--text-muted); margin-top:10px;"></p>
             <div class="modal-buttons">
@@ -800,14 +801,53 @@
 
         // --- SCANNER CODICE A BARRE ---
         let html5QrCodeScanner = null;
+        let nativeScanStream = null;
+        let nativeScanLoopId = null;
         function manualBarcodeSearch() {
             const code = document.getElementById('inputBarcode').value.trim();
             if (!code) { alert("Inserisci prima un numero di codice a barre."); return; }
             lookupBarcode(code);
         }
-        function openScanner() {
+        async function openScanner() {
             document.getElementById('scannerModal').style.display = 'flex';
             document.getElementById('scannerStatus').textContent = '';
+            if ('BarcodeDetector' in window) {
+                try {
+                    const supported = await BarcodeDetector.getSupportedFormats();
+                    if (supported && supported.length > 0) {
+                        await startNativeScanner();
+                        return;
+                    }
+                } catch (e) { /* nessun supporto nativo, proseguo col fallback */ }
+            }
+            startFallbackScanner();
+        }
+        async function startNativeScanner() {
+            const video = document.getElementById('nativeScannerVideo');
+            video.style.display = 'block';
+            document.getElementById('barcode-reader').style.display = 'none';
+            nativeScanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            video.srcObject = nativeScanStream;
+            await video.play();
+            const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] });
+            const loop = async () => {
+                if (!nativeScanStream) return;
+                try {
+                    const codes = await detector.detect(video);
+                    if (codes.length > 0) { onScanSuccess(codes[0].rawValue); return; }
+                } catch (e) {}
+                nativeScanLoopId = requestAnimationFrame(loop);
+            };
+            nativeScanLoopId = requestAnimationFrame(loop);
+        }
+        function stopNativeScanner() {
+            if (nativeScanLoopId) { cancelAnimationFrame(nativeScanLoopId); nativeScanLoopId = null; }
+            if (nativeScanStream) { nativeScanStream.getTracks().forEach(t => t.stop()); nativeScanStream = null; }
+            const video = document.getElementById('nativeScannerVideo');
+            video.pause(); video.srcObject = null; video.style.display = 'none';
+        }
+        function startFallbackScanner() {
+            document.getElementById('barcode-reader').style.display = 'block';
             html5QrCodeScanner = new Html5Qrcode("barcode-reader", {
                 formatsToSupport: [
                     Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
@@ -815,7 +855,6 @@
                     Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
                     Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.QR_CODE
                 ],
-                experimentalFeatures: { useBarCodeDetectorIfSupported: true },
                 verbose: false
             });
             const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
@@ -834,6 +873,7 @@
         }
         function closeScanner() {
             document.getElementById('scannerModal').style.display = 'none';
+            stopNativeScanner();
             const scanner = html5QrCodeScanner;
             html5QrCodeScanner = null;
             if (scanner) {
@@ -848,18 +888,28 @@
         async function lookupBarcode(code) {
             document.getElementById('modalTitle').textContent = '⏳ Cerco il prodotto...';
             try {
-                const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,ingredients_text,allergens_tags`);
+                const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,ingredients_text,ingredients_text_it,allergens_tags`);
                 const data = await res.json();
                 document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Ingrediente' : '＋ Nuovo Ingrediente';
                 if (data.status === 1 && data.product) {
                     const p = data.product;
+                    let trovatoNome = false, trovatoIngredienti = false, trovatoAllergeni = false;
                     if (p.product_name && !document.getElementById('inputIngrediente').value) {
                         document.getElementById('inputIngrediente').value = p.brands ? `${p.product_name} (${p.brands})` : p.product_name;
+                        trovatoNome = true;
                     }
-                    if (p.ingredients_text) document.getElementById('inputIngredientiTesto').value = p.ingredients_text;
-                    if (p.allergens_tags) {
+                    const ingredientiTesto = p.ingredients_text_it || p.ingredients_text;
+                    if (ingredientiTesto) {
+                        document.getElementById('inputIngredientiTesto').value = ingredientiTesto;
+                        trovatoIngredienti = true;
+                    }
+                    if (p.allergens_tags && p.allergens_tags.length > 0) {
                         const codes = p.allergens_tags.map(t => OFF_ALLERGEN_MAP[t]).filter(Boolean);
                         setSelectedAllergeni(codes);
+                        trovatoAllergeni = codes.length > 0;
+                    }
+                    if (!trovatoIngredienti && !trovatoAllergeni) {
+                        alert(`Prodotto trovato${trovatoNome ? ' ("' + p.product_name + '")' : ''}, ma su Open Food Facts non risultano ingredienti o allergeni compilati per questo articolo. Puoi inserirli tu a mano — il nome e il codice restano comunque salvati.`);
                     }
                 } else {
                     alert("Prodotto non trovato nel database pubblico (Open Food Facts). Inserisci i dati manualmente — il codice a barre resta comunque salvato.");
