@@ -330,7 +330,7 @@
     <!-- MODAL AGGIUNGI / MODIFICA PRODOTTO -->
     <div class="modal-overlay" id="productModal">
         <div class="modal">
-            <h3 style="font-weight: 800; margin-bottom: 16px; color: var(--primary-dark);" id="modalTitle">＋ Nuovo Ingrediente</h3>
+            <h3 style="font-weight: 800; margin-bottom: 16px; color: var(--primary-dark);" id="modalTitle">＋ Nuovo Prodotto</h3>
             <input type="hidden" id="editItemId" value="">
 
             <button type="button" class="btn" style="width:100%; background: var(--primary); color:white; margin-bottom:16px;" onclick="openScanner()">📷 Scansiona codice a barre</button>
@@ -359,7 +359,7 @@
                 <input type="text" id="inputRepartoNew" class="form-control" placeholder="Nome nuovo reparto" style="margin-top:8px; display:none;">
             </div>
             <div class="form-group">
-                <label>Nome Ingrediente *</label>
+                <label>Nome Prodotto *</label>
                 <div style="display:flex; gap:8px;">
                     <input type="text" id="inputIngrediente" class="form-control" required style="flex-grow:1;">
                     <button type="button" class="btn-header-light" style="flex-shrink:0;" onclick="searchByName()">🔍 Cerca</button>
@@ -941,7 +941,7 @@
             try {
                 const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,ingredients_text,ingredients_text_it,allergens_tags`);
                 const data = await res.json();
-                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Ingrediente' : '＋ Nuovo Ingrediente';
+                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
                 if (data.status === 1 && data.product) {
                     const p = data.product;
                     let trovatoNome = false, trovatoIngredienti = false, trovatoAllergeni = false;
@@ -966,7 +966,7 @@
                     alert("Prodotto non trovato nel database pubblico (Open Food Facts). Inserisci i dati manualmente — il codice a barre resta comunque salvato.");
                 }
             } catch (e) {
-                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Ingrediente' : '＋ Nuovo Ingrediente';
+                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
                 alert("Errore di connessione durante la ricerca del prodotto. Puoi comunque inserire i dati manualmente.");
             }
         }
@@ -981,7 +981,7 @@
                 const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(name)}&search_simple=1&action=process&json=1&page_size=6&fields=product_name,brands,ingredients_text,ingredients_text_it,allergens_tags,code`;
                 const res = await fetch(url);
                 const data = await res.json();
-                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Ingrediente' : '＋ Nuovo Ingrediente';
+                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
                 nameSearchResultsData = (data.products || []).filter(p => p.product_name);
                 if (nameSearchResultsData.length === 0) {
                     alert("Nessun risultato trovato su Open Food Facts per questo nome. Prova con un nome più generico (es. il solo marchio o tipo di prodotto), oppure inserisci i dati a mano.");
@@ -999,7 +999,7 @@
                 `).join('');
                 document.getElementById('nameSearchModal').style.display = 'flex';
             } catch (e) {
-                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Ingrediente' : '＋ Nuovo Ingrediente';
+                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
                 alert("Errore di connessione durante la ricerca. Puoi comunque inserire i dati manualmente.");
             }
         }
@@ -1059,7 +1059,7 @@
             document.getElementById('inputMinima').value = ''; document.getElementById('inputUtilizzo').value = '';
             document.getElementById('inputBarcode').value = ''; document.getElementById('inputIngredientiTesto').value = '';
             setSelectedAllergeni([]);
-            document.getElementById('modalTitle').textContent = '＋ Nuovo Ingrediente';
+            document.getElementById('modalTitle').textContent = '＋ Nuovo Prodotto';
             document.getElementById('productModal').style.display = 'flex';
         }
 
@@ -1073,7 +1073,7 @@
             document.getElementById('inputBarcode').value = item.barcode || '';
             document.getElementById('inputIngredientiTesto').value = item.ingredienti_testo || '';
             setSelectedAllergeni(item.allergeni || []);
-            document.getElementById('modalTitle').textContent = '✏️ Modifica Ingrediente';
+            document.getElementById('modalTitle').textContent = '✏️ Modifica Prodotto';
             document.getElementById('productModal').style.display = 'flex';
         }
 
@@ -1343,5 +1343,6 @@
         buildAllergeniCheckboxes();
         initData();
     </script>
+    <div style="text-align:center; font-size:10px; color:#ccc; padding:14px 0 6px;">v16 · 27/08</div>
 </body>
 </html>
