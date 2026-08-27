@@ -182,11 +182,16 @@
         .allergene-chip.selected { background: var(--urgent); color: white; border-color: var(--primary-dark); }
         .menu-check-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
         .menu-check-ok { text-align:center; padding: 20px; color: var(--success); font-weight:700; }
+        .name-search-row { padding: 10px 0; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:10px; }
+        .name-search-info { flex-grow:1; }
+        .name-search-title { font-weight:700; font-size:14px; }
+        .name-search-brand { font-size:12px; color:var(--text-muted); }
         .supplier-del-btn { color: var(--danger); background: none; border: none; cursor: pointer; font-size: 16px; }
         .add-supplier-box { background: #f5f4f2; border: 1px dashed #b8b4ac; border-radius: 10px; padding: 12px; margin-top: 15px; }
     </style>
 </head>
 <body>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v16 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <div id="inventoryView">
@@ -278,13 +283,32 @@
         </div>
     </div>
 
+    <!-- MODAL RISULTATI RICERCA PER NOME -->
+    <div class="modal-overlay" id="nameSearchModal">
+        <div class="modal">
+            <h3 style="color: var(--primary-dark); margin-bottom: 10px;">🔍 Risultati trovati</h3>
+            <p class="stock-update-intro">Scegli il prodotto più simile per compilare ingredienti e allergeni.</p>
+            <div id="nameSearchResults"></div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" onclick="closeNameSearchModal()">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL SCANNER CODICE A BARRE -->
     <div class="modal-overlay" id="scannerModal">
         <div class="modal">
             <h3 style="color: var(--primary-dark); margin-bottom: 10px;">📷 Inquadra il codice a barre</h3>
             <p class="stock-update-intro">Centra il codice a barre nel riquadro, tienilo dritto (non inclinato) e a circa 10-15 cm di distanza, con buona luce.</p>
-            <video id="nativeScannerVideo" style="width:100%; border-radius:10px; display:none; background:#000;" autoplay playsinline muted></video>
-            <div id="barcode-reader" style="width:100%; border-radius:10px; overflow:hidden;"></div>
+            <div style="position:relative; border-radius:10px; overflow:hidden;">
+                <video id="nativeScannerVideo" style="width:100%; display:none; background:#000;" autoplay playsinline muted></video>
+                <div id="barcode-reader" style="width:100%; overflow:hidden;"></div>
+                <div id="scannerGuide" style="display:none; position:absolute; top:30%; left:10%; width:80%; height:40%; border:3px solid var(--accent); border-radius:8px; box-shadow:0 0 0 2000px rgba(0,0,0,0.35); pointer-events:none;"></div>
+            </div>
+            <div id="zoomControlWrap" style="display:none; margin-top:10px;">
+                <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">🔍 Zoom (se il codice è piccolo, avvicina così)</label>
+                <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1" style="width:100%;" oninput="applyZoom(this.value)">
+            </div>
             <p id="scannerStatus" style="text-align:center; font-size:13px; color:var(--text-muted); margin-top:10px;"></p>
             <div class="modal-buttons">
                 <button type="button" class="btn btn-secondary" onclick="closeScanner()">Annulla</button>
@@ -307,7 +331,7 @@
     <!-- MODAL AGGIUNGI / MODIFICA PRODOTTO -->
     <div class="modal-overlay" id="productModal">
         <div class="modal">
-            <h3 style="font-weight: 800; margin-bottom: 16px; color: var(--primary-dark);" id="modalTitle">＋ Nuovo Ingrediente</h3>
+            <h3 style="font-weight: 800; margin-bottom: 16px; color: var(--primary-dark);" id="modalTitle">＋ Nuovo Prodotto</h3>
             <input type="hidden" id="editItemId" value="">
 
             <button type="button" class="btn" style="width:100%; background: var(--primary); color:white; margin-bottom:16px;" onclick="openScanner()">📷 Scansiona codice a barre</button>
@@ -336,8 +360,12 @@
                 <input type="text" id="inputRepartoNew" class="form-control" placeholder="Nome nuovo reparto" style="margin-top:8px; display:none;">
             </div>
             <div class="form-group">
-                <label>Nome Ingrediente *</label>
-                <input type="text" id="inputIngrediente" class="form-control" required>
+                <label>Nome Prodotto *</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="inputIngrediente" class="form-control" required style="flex-grow:1;">
+                    <button type="button" class="btn-header-light" style="flex-shrink:0;" onclick="searchByName()">🔍 Cerca</button>
+                </div>
+                <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">Nessun codice a barre? Scrivi il nome del prodotto qui sopra e premi "Cerca" per trovare comunque ingredienti e allergeni.</p>
             </div>
             <div class="form-group">
                 <label>Scorta Minima *</label>
@@ -826,9 +854,13 @@
             const video = document.getElementById('nativeScannerVideo');
             video.style.display = 'block';
             document.getElementById('barcode-reader').style.display = 'none';
-            nativeScanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            document.getElementById('scannerGuide').style.display = 'block';
+            nativeScanStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
+            });
             video.srcObject = nativeScanStream;
             await video.play();
+            setupZoomControl(nativeScanStream);
             const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] });
             const loop = async () => {
                 if (!nativeScanStream) return;
@@ -840,11 +872,31 @@
             };
             nativeScanLoopId = requestAnimationFrame(loop);
         }
+        function setupZoomControl(stream) {
+            const track = stream.getVideoTracks()[0];
+            if (!track || !track.getCapabilities) return;
+            const caps = track.getCapabilities();
+            if (caps.zoom) {
+                const slider = document.getElementById('zoomSlider');
+                slider.min = caps.zoom.min; slider.max = caps.zoom.max; slider.step = caps.zoom.step || 0.1;
+                slider.value = caps.zoom.min;
+                document.getElementById('zoomControlWrap').style.display = 'block';
+            }
+        }
+        function applyZoom(value) {
+            if (!nativeScanStream) return;
+            const track = nativeScanStream.getVideoTracks()[0];
+            if (track && track.applyConstraints) {
+                track.applyConstraints({ advanced: [{ zoom: parseFloat(value) }] }).catch(() => {});
+            }
+        }
         function stopNativeScanner() {
             if (nativeScanLoopId) { cancelAnimationFrame(nativeScanLoopId); nativeScanLoopId = null; }
             if (nativeScanStream) { nativeScanStream.getTracks().forEach(t => t.stop()); nativeScanStream = null; }
             const video = document.getElementById('nativeScannerVideo');
             video.pause(); video.srcObject = null; video.style.display = 'none';
+            document.getElementById('scannerGuide').style.display = 'none';
+            document.getElementById('zoomControlWrap').style.display = 'none';
         }
         function startFallbackScanner() {
             document.getElementById('barcode-reader').style.display = 'block';
@@ -890,7 +942,7 @@
             try {
                 const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,ingredients_text,ingredients_text_it,allergens_tags`);
                 const data = await res.json();
-                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Ingrediente' : '＋ Nuovo Ingrediente';
+                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
                 if (data.status === 1 && data.product) {
                     const p = data.product;
                     let trovatoNome = false, trovatoIngredienti = false, trovatoAllergeni = false;
@@ -915,10 +967,59 @@
                     alert("Prodotto non trovato nel database pubblico (Open Food Facts). Inserisci i dati manualmente — il codice a barre resta comunque salvato.");
                 }
             } catch (e) {
-                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Ingrediente' : '＋ Nuovo Ingrediente';
+                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
                 alert("Errore di connessione durante la ricerca del prodotto. Puoi comunque inserire i dati manualmente.");
             }
         }
+
+        // --- RICERCA INGREDIENTI DAL NOME (senza codice a barre) ---
+        let nameSearchResultsData = [];
+        async function searchByName() {
+            const name = document.getElementById('inputIngrediente').value.trim();
+            if (!name) { alert("Scrivi prima il nome del prodotto nel campo qui sopra."); return; }
+            document.getElementById('modalTitle').textContent = '⏳ Cerco...';
+            try {
+                const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(name)}&search_simple=1&action=process&json=1&page_size=6&fields=product_name,brands,ingredients_text,ingredients_text_it,allergens_tags,code`;
+                const res = await fetch(url);
+                const data = await res.json();
+                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
+                nameSearchResultsData = (data.products || []).filter(p => p.product_name);
+                if (nameSearchResultsData.length === 0) {
+                    alert("Nessun risultato trovato su Open Food Facts per questo nome. Prova con un nome più generico (es. il solo marchio o tipo di prodotto), oppure inserisci i dati a mano.");
+                    return;
+                }
+                const container = document.getElementById('nameSearchResults');
+                container.innerHTML = nameSearchResultsData.map((p, idx) => `
+                    <div class="name-search-row">
+                        <div class="name-search-info">
+                            <div class="name-search-title">${p.product_name}</div>
+                            <div class="name-search-brand">${p.brands || ''}</div>
+                        </div>
+                        <button type="button" class="btn-header-light" onclick="selectNameSearchResult(${idx})">Usa questo</button>
+                    </div>
+                `).join('');
+                document.getElementById('nameSearchModal').style.display = 'flex';
+            } catch (e) {
+                document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
+                alert("Errore di connessione durante la ricerca. Puoi comunque inserire i dati manualmente.");
+            }
+        }
+        function selectNameSearchResult(idx) {
+            const p = nameSearchResultsData[idx];
+            if (!p) return;
+            const ingredientiTesto = p.ingredients_text_it || p.ingredients_text;
+            if (ingredientiTesto) document.getElementById('inputIngredientiTesto').value = ingredientiTesto;
+            if (p.allergens_tags && p.allergens_tags.length > 0) {
+                const codes = p.allergens_tags.map(t => OFF_ALLERGEN_MAP[t]).filter(Boolean);
+                setSelectedAllergeni(codes);
+            }
+            if (p.code && !document.getElementById('inputBarcode').value) document.getElementById('inputBarcode').value = p.code;
+            closeNameSearchModal();
+            if (!ingredientiTesto && (!p.allergens_tags || p.allergens_tags.length === 0)) {
+                alert("Prodotto selezionato, ma non ha ingredienti/allergeni compilati su Open Food Facts. Il codice a barre (se disponibile) è stato comunque salvato.");
+            }
+        }
+        function closeNameSearchModal() { document.getElementById('nameSearchModal').style.display = 'none'; }
 
         // --- VERIFICA INCROCIATA MENU / MAGAZZINO ---
         const IT_STOPWORDS = ['di','da','in','il','la','le','gli','e','o','del','della','dei','delle','con','per','a','dell','nell','sull','all'];
@@ -959,7 +1060,7 @@
             document.getElementById('inputMinima').value = ''; document.getElementById('inputUtilizzo').value = '';
             document.getElementById('inputBarcode').value = ''; document.getElementById('inputIngredientiTesto').value = '';
             setSelectedAllergeni([]);
-            document.getElementById('modalTitle').textContent = '＋ Nuovo Ingrediente';
+            document.getElementById('modalTitle').textContent = '＋ Nuovo Prodotto';
             document.getElementById('productModal').style.display = 'flex';
         }
 
@@ -973,7 +1074,7 @@
             document.getElementById('inputBarcode').value = item.barcode || '';
             document.getElementById('inputIngredientiTesto').value = item.ingredienti_testo || '';
             setSelectedAllergeni(item.allergeni || []);
-            document.getElementById('modalTitle').textContent = '✏️ Modifica Ingrediente';
+            document.getElementById('modalTitle').textContent = '✏️ Modifica Prodotto';
             document.getElementById('productModal').style.display = 'flex';
         }
 
