@@ -191,7 +191,7 @@
     </style>
 </head>
 <body>
-    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v18 · 27/08 🔧</div>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v19 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <div id="inventoryView">
@@ -838,10 +838,14 @@
         }
         async function openScanner() {
             document.getElementById('scannerModal').style.display = 'flex';
-            document.getElementById('scannerStatus').textContent = '';
+            const statusEl = document.getElementById('scannerStatus');
+            statusEl.style.color = 'var(--text-muted)';
+            statusEl.textContent = '🔎 Diagnostica: controllo se il browser supporta la lettura nativa...';
             if ('BarcodeDetector' in window) {
+                statusEl.textContent = '🔎 Diagnostica: supporto nativo presente, chiedo i formati...';
                 try {
                     const supported = await BarcodeDetector.getSupportedFormats();
+                    statusEl.textContent = '🔎 Diagnostica: formati nativi = ' + (supported ? supported.join(', ') : 'nessuno') + '. Avvio fotocamera...';
                     if (supported && supported.length > 0) {
                         await startNativeScanner();
                         return;
@@ -849,12 +853,16 @@
                 } catch (e) {
                     stopNativeScanner();
                     if (e && (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')) {
-                        document.getElementById('scannerStatus').textContent = "Permesso fotocamera negato. Tocca l'icona del lucchetto (o 'i' info) vicino all'indirizzo del sito in alto, vai su Permessi > Fotocamera > Consenti, poi RICARICA la pagina e riprova.";
+                        statusEl.style.color = 'var(--urgent)';
+                        statusEl.textContent = "❌ Permesso fotocamera negato. Tocca l'icona del lucchetto (o 'i' info) vicino all'indirizzo del sito in alto, vai su Permessi > Fotocamera > Consenti, poi RICARICA la pagina e riprova.";
                         return;
                     }
+                    statusEl.style.color = 'var(--urgent)';
+                    statusEl.textContent = '🔎 Diagnostica: scanner nativo fallito con errore: [' + (e && e.name) + '] ' + (e && e.message) + '. Provo il metodo alternativo...';
                     console.error('Scanner nativo non disponibile, passo al metodo alternativo:', e);
-                    /* proseguo col fallback */
                 }
+            } else {
+                statusEl.textContent = '🔎 Diagnostica: nessun supporto nativo nel browser, uso il metodo alternativo...';
             }
             startFallbackScanner();
         }
@@ -912,16 +920,25 @@
             document.getElementById('zoomControlWrap').style.display = 'none';
         }
         function startFallbackScanner() {
+            const statusEl = document.getElementById('scannerStatus');
+            statusEl.style.color = 'var(--text-muted)';
+            statusEl.textContent += ' 🔎 Diagnostica: avvio libreria alternativa (html5-qrcode)...';
             document.getElementById('barcode-reader').style.display = 'block';
-            html5QrCodeScanner = new Html5Qrcode("barcode-reader", {
-                formatsToSupport: [
-                    Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
-                    Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
-                    Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
-                    Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.QR_CODE
-                ],
-                verbose: false
-            });
+            try {
+                html5QrCodeScanner = new Html5Qrcode("barcode-reader", {
+                    formatsToSupport: [
+                        Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+                        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+                        Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.QR_CODE
+                    ],
+                    verbose: false
+                });
+            } catch (e) {
+                statusEl.style.color = 'var(--urgent)';
+                statusEl.textContent = '❌ Diagnostica: la libreria di scansione non si è caricata correttamente. Errore: ' + e.message + '. Probabile problema di connessione internet in questo momento.';
+                return;
+            }
             const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
                 const edge = Math.min(viewfinderWidth, viewfinderHeight);
                 const w = Math.floor(edge * 0.8);
@@ -932,8 +949,12 @@
                 { fps: 15, qrbox: qrboxFunction },
                 (decodedText) => onScanSuccess(decodedText),
                 () => {}
-            ).catch(err => {
-                document.getElementById('scannerStatus').textContent = "Impossibile accedere alla fotocamera. Controlla i permessi del browser.";
+            ).then(() => {
+                statusEl.style.color = 'var(--success)';
+                statusEl.textContent = '✅ Diagnostica: fotocamera alternativa avviata correttamente.';
+            }).catch(err => {
+                statusEl.style.color = 'var(--urgent)';
+                statusEl.textContent = "❌ Diagnostica: impossibile accedere alla fotocamera con nessuno dei due metodi. Errore: [" + (err && err.name) + "] " + (err && err.message);
             });
         }
         function closeScanner() {
@@ -1016,7 +1037,7 @@
             } catch (e) {
                 document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
                 console.error('Errore ricerca per nome:', e);
-                alert("⚠️ ERRORE TECNICO: la ricerca su Open Food Facts non ha risposto correttamente (problema di connessione, non di risultati). Riprova tra poco, oppure inserisci i dati a mano.");
+                alert("⚠️ ERRORE TECNICO (dettaglio diagnostico):\n[" + e.name + "] " + e.message + "\n\nSe vedi 'Failed to fetch' è quasi certamente un blocco di rete verso Open Food Facts (nulla che riguardi l'app). Riprova tra poco, oppure inserisci i dati a mano.");
             }
         }
         function selectNameSearchResult(idx) {
