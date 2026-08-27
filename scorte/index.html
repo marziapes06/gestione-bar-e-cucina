@@ -282,7 +282,7 @@
     <div class="modal-overlay" id="scannerModal">
         <div class="modal">
             <h3 style="color: var(--primary-dark); margin-bottom: 10px;">📷 Inquadra il codice a barre</h3>
-            <p class="stock-update-intro">Tieni il telefono fermo, a circa 10-15 cm dal codice.</p>
+            <p class="stock-update-intro">Centra il codice a barre nel riquadro, tienilo dritto (non inclinato) e a circa 10-15 cm di distanza, con buona luce.</p>
             <div id="barcode-reader" style="width:100%; border-radius:10px; overflow:hidden;"></div>
             <p id="scannerStatus" style="text-align:center; font-size:13px; color:var(--text-muted); margin-top:10px;"></p>
             <div class="modal-buttons">
@@ -800,10 +800,22 @@
         function openScanner() {
             document.getElementById('scannerModal').style.display = 'flex';
             document.getElementById('scannerStatus').textContent = '';
-            html5QrCodeScanner = new Html5Qrcode("barcode-reader");
+            html5QrCodeScanner = new Html5Qrcode("barcode-reader", {
+                formatsToSupport: [
+                    Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+                    Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.QR_CODE
+                ]
+            });
+            const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
+                const edge = Math.min(viewfinderWidth, viewfinderHeight);
+                const w = Math.floor(edge * 0.8);
+                return { width: w, height: Math.floor(w * 0.5) };
+            };
             html5QrCodeScanner.start(
                 { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 260, height: 150 } },
+                { fps: 15, qrbox: qrboxFunction },
                 (decodedText) => onScanSuccess(decodedText),
                 () => {}
             ).catch(err => {
@@ -811,11 +823,12 @@
             });
         }
         function closeScanner() {
-            if (html5QrCodeScanner) {
-                html5QrCodeScanner.stop().then(() => html5QrCodeScanner.clear()).catch(() => {});
-                html5QrCodeScanner = null;
-            }
             document.getElementById('scannerModal').style.display = 'none';
+            const scanner = html5QrCodeScanner;
+            html5QrCodeScanner = null;
+            if (scanner) {
+                try { scanner.stop().then(() => scanner.clear()).catch(() => {}); } catch (e) {}
+            }
         }
         function onScanSuccess(code) {
             closeScanner();
