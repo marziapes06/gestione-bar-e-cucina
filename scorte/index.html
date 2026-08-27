@@ -312,7 +312,10 @@
             <button type="button" class="btn" style="width:100%; background: var(--primary); color:white; margin-bottom:16px;" onclick="openScanner()">📷 Scansiona codice a barre</button>
             <div class="form-group">
                 <label>Codice a barre</label>
-                <input type="text" id="inputBarcode" class="form-control" placeholder="Scansiona o inserisci manualmente">
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="inputBarcode" class="form-control" placeholder="Scansiona o inserisci manualmente" style="flex-grow:1;">
+                    <button type="button" class="btn-header-light" style="flex-shrink:0;" onclick="manualBarcodeSearch()">🔍 Cerca</button>
+                </div>
             </div>
 
             <div class="form-group">
@@ -797,6 +800,11 @@
 
         // --- SCANNER CODICE A BARRE ---
         let html5QrCodeScanner = null;
+        function manualBarcodeSearch() {
+            const code = document.getElementById('inputBarcode').value.trim();
+            if (!code) { alert("Inserisci prima un numero di codice a barre."); return; }
+            lookupBarcode(code);
+        }
         function openScanner() {
             document.getElementById('scannerModal').style.display = 'flex';
             document.getElementById('scannerStatus').textContent = '';
@@ -806,7 +814,9 @@
                     Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
                     Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
                     Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.QR_CODE
-                ]
+                ],
+                experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+                verbose: false
             });
             const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
                 const edge = Math.min(viewfinderWidth, viewfinderHeight);
