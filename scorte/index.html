@@ -191,7 +191,7 @@
     </style>
 </head>
 <body>
-    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v16 · 27/08 🔧</div>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v17 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <div id="inventoryView">
@@ -846,7 +846,13 @@
                         await startNativeScanner();
                         return;
                     }
-                } catch (e) { /* nessun supporto nativo, proseguo col fallback */ }
+                } catch (e) {
+                    if (e && (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')) {
+                        document.getElementById('scannerStatus').textContent = "Permesso fotocamera negato. Tocca l'icona del lucchetto (o 'i' info) vicino all'indirizzo del sito in alto, vai su Permessi > Fotocamera > Consenti, poi RICARICA la pagina e riprova.";
+                        return;
+                    }
+                    /* nessun supporto nativo, proseguo col fallback */
+                }
             }
             startFallbackScanner();
         }
@@ -981,11 +987,12 @@
             try {
                 const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(name)}&search_simple=1&action=process&json=1&page_size=6&fields=product_name,brands,ingredients_text,ingredients_text_it,allergens_tags,code`;
                 const res = await fetch(url);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
                 nameSearchResultsData = (data.products || []).filter(p => p.product_name);
                 if (nameSearchResultsData.length === 0) {
-                    alert("Nessun risultato trovato su Open Food Facts per questo nome. Prova con un nome più generico (es. il solo marchio o tipo di prodotto), oppure inserisci i dati a mano.");
+                    alert(`❌ NESSUN RISULTATO: "${name}" non risulta su Open Food Facts. Prova con un nome più generico (es. solo il marchio), oppure inserisci ingredienti/allergeni a mano.`);
                     return;
                 }
                 const container = document.getElementById('nameSearchResults');
@@ -1001,7 +1008,8 @@
                 document.getElementById('nameSearchModal').style.display = 'flex';
             } catch (e) {
                 document.getElementById('modalTitle').textContent = document.getElementById('editItemId').value ? '✏️ Modifica Prodotto' : '＋ Nuovo Prodotto';
-                alert("Errore di connessione durante la ricerca. Puoi comunque inserire i dati manualmente.");
+                console.error('Errore ricerca per nome:', e);
+                alert("⚠️ ERRORE TECNICO: la ricerca su Open Food Facts non ha risposto correttamente (problema di connessione, non di risultati). Riprova tra poco, oppure inserisci i dati a mano.");
             }
         }
         function selectNameSearchResult(idx) {
