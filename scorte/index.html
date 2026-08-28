@@ -34,25 +34,25 @@
             background-image: radial-gradient(circle at 15% 8%, rgba(255,255,255,0.4), transparent 40%), radial-gradient(circle at 85% 0%, rgba(124,35,64,0.07), transparent 45%);
             color: var(--text-main); padding-bottom: 100px;
         }
-        header { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 20px 20px 18px; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 16px rgba(78,21,38,0.25); border-bottom: 3px dashed rgba(255,255,255,0.55); }
+        header { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 12px 16px 10px; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 16px rgba(78,21,38,0.25); border-bottom: 3px dashed rgba(255,255,255,0.55); }
         .header-top { display: flex; justify-content: space-between; align-items: center; }
         h1 { font-family: var(--font-display); font-size: 26px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
-        .brand-logo { height: 140px; width: auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
+        .brand-logo { height: 70px; width: auto; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
         .gestione-scorte-title {
             font-family: 'Patrick Hand', cursive;
-            font-size: 34px;
+            font-size: 24px;
             line-height: 1.1;
             text-align: center;
             color: white;
-            margin-top: 8px;
+            margin-top: 4px;
             letter-spacing: 0.5px;
             text-shadow: 0 2px 5px rgba(0,0,0,0.18);
         }
         .header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
         
         .btn-header {
-            background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.4); color: white; padding: 8px 12px;
-            border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; backdrop-filter: blur(4px);
+            background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.4); color: white; padding: 6px 10px;
+            border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; backdrop-filter: blur(4px);
         }
         .btn-header:active { background: rgba(255, 255, 255, 0.35); }
 
@@ -69,7 +69,7 @@
         #shoppingView { display: none; }
 
         /* INVENTORY STYLES */
-        .search-container { margin-top: 14px; }
+        .search-container { margin-top: 8px; }
         .search-bar { width: 100%; padding: 10px 16px; border-radius: 25px; border: none; font-size: 14px; outline: none; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
 
         .reparto-header { display: flex; align-items: center; justify-content: space-between; margin: 28px 0 14px 0; padding-bottom: 8px; border-bottom: 2px solid var(--primary); }
@@ -191,7 +191,7 @@
     </style>
 </head>
 <body>
-    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v22 · 27/08 🔧</div>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v24 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
@@ -280,6 +280,20 @@
             <div class="modal-buttons">
                 <button type="button" class="btn btn-indietro" onclick="cancelStockUpdate()">← Indietro</button>
                 <button type="button" class="btn btn-stock-save" onclick="confirmStockUpdate()">Salva e Svuota</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL RITAGLIO FOTO INGREDIENTI -->
+    <div class="modal-overlay" id="cropModal">
+        <div class="modal">
+            <h3 style="color: var(--primary-dark); margin-bottom: 10px;">✂️ Seleziona la lista ingredienti</h3>
+            <p class="stock-update-intro">Trascina un riquadro sopra la scritta con gli ingredienti, per leggere solo quella parte (più preciso). Oppure usa la foto intera.</p>
+            <canvas id="cropCanvas" style="width:100%; border-radius:10px; display:block; touch-action:none; cursor:crosshair; background:#000;"></canvas>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" onclick="cancelCrop()">Annulla</button>
+                <button type="button" class="btn btn-header-light" onclick="useCropFullImage()">Foto intera</button>
+                <button type="button" class="btn btn-stock-save" onclick="confirmCrop()">Usa selezione</button>
             </div>
         </div>
     </div>
@@ -382,6 +396,7 @@
             <div class="form-group">
                 <label>Allergeni</label>
                 <div id="allergeniCheckboxes" class="allergeni-grid"></div>
+                <p style="font-size:11px; color:var(--text-muted); margin-top:6px;">Il "Lattosio" è aggiunto in più rispetto ai 14 allergeni di legge, utile per la clientela intollerante.</p>
             </div>
             <div class="form-group">
                 <label>Note</label>
@@ -510,7 +525,8 @@
             { code: 'LA', label: 'Latte' }, { code: 'FG', label: 'Frutta a guscio' },
             { code: 'SE', label: 'Sedano' }, { code: 'SN', label: 'Senape' },
             { code: 'SS', label: 'Sesamo' }, { code: 'SF', label: 'Solfiti' },
-            { code: 'LU', label: 'Lupini' }, { code: 'MO', label: 'Molluschi' }
+            { code: 'LU', label: 'Lupini' }, { code: 'MO', label: 'Molluschi' },
+            { code: 'LATTOSIO', label: 'Lattosio' }
         ];
 
         // Mappa dei tag allergeni di Open Food Facts verso i nostri codici
@@ -1073,7 +1089,8 @@
 
         // Riconosce gli allergeni cercando parole chiave tipiche nel testo letto dalla foto
         function detectAllergensFromText(text) {
-            const t = text.toLowerCase();
+            const tRaw = text.toLowerCase();
+            const t = tRaw.replace(/senza\s+\w+/g, ''); // evita falsi positivi tipo "senza lattosio"
             const map = {
                 G: ['glutine', 'grano', 'frumento', 'farina di', 'orzo', 'avena', 'segale', 'farro', 'malto'],
                 C: ['crostace', 'gambero', 'gamberi', 'scampi', 'granchio'],
@@ -1081,7 +1098,7 @@
                 PE: ['pesce', 'tonno', 'salmone', 'acciug', 'merluzzo', 'alici'],
                 AR: ['arachid'],
                 SO: ['soia', 'soja'],
-                LA: ['latte', 'lattosio', 'burro', 'panna', 'formaggio', 'siero di latte', 'caseina', 'yogurt'],
+                LA: ['latte', 'burro', 'panna', 'formaggio', 'siero di latte', 'caseina', 'yogurt'],
                 FG: ['mandorl', 'nocciol', 'noce', 'noci', 'pistacch', 'anacardi', 'frutta a guscio', 'macadamia'],
                 SE: ['sedano'],
                 SN: ['senape'],
@@ -1094,6 +1111,7 @@
             for (const code in map) {
                 if (map[code].some(k => t.includes(k))) found.push(code);
             }
+            if (t.includes('lattosio')) found.push('LATTOSIO');
             return found;
         }
 
@@ -1127,15 +1145,99 @@
             }
         }
 
-        async function handleIngredientPhoto(event) {
+        // --- RITAGLIO FOTO INGREDIENTI ---
+        let cropSourceImage = null;
+        let cropCanvas = null, cropCtx = null;
+        let cropSelecting = false, cropStartX = 0, cropStartY = 0, cropEndX = 0, cropEndY = 0;
+        let cropScale = 1;
+        let cropTargetStatusElId = 'photoAnalysisStatus';
+
+        function handleIngredientPhoto(event) {
             const file = event.target.files[0];
             if (!file) return;
-            const result = await analyzeIngredientPhoto(file, 'photoAnalysisStatus');
-            if (result) {
-                if (result.ingredienti_testo) document.getElementById('inputIngredientiTesto').value = result.ingredienti_testo;
-                if (result.allergeni && result.allergeni.length > 0) setSelectedAllergeni(result.allergeni);
-            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                cropSourceImage = new Image();
+                cropSourceImage.onload = () => openCropModal();
+                cropSourceImage.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
             event.target.value = '';
+        }
+
+        function openCropModal() {
+            document.getElementById('cropModal').style.display = 'flex';
+            cropCanvas = document.getElementById('cropCanvas');
+            cropCtx = cropCanvas.getContext('2d');
+            const maxDisplayWidth = Math.min(window.innerWidth * 0.8, 440);
+            cropScale = maxDisplayWidth / cropSourceImage.naturalWidth;
+            cropCanvas.width = maxDisplayWidth;
+            cropCanvas.height = cropSourceImage.naturalHeight * cropScale;
+            drawCropBase();
+            cropStartX = cropStartY = cropEndX = cropEndY = 0;
+            setupCropEvents();
+        }
+
+        function drawCropBase() {
+            cropCtx.drawImage(cropSourceImage, 0, 0, cropCanvas.width, cropCanvas.height);
+        }
+
+        function setupCropEvents() {
+            cropCanvas.onpointerdown = (e) => {
+                cropSelecting = true;
+                const rect = cropCanvas.getBoundingClientRect();
+                const scaleX = cropCanvas.width / rect.width, scaleY = cropCanvas.height / rect.height;
+                cropStartX = (e.clientX - rect.left) * scaleX;
+                cropStartY = (e.clientY - rect.top) * scaleY;
+                cropEndX = cropStartX; cropEndY = cropStartY;
+            };
+            cropCanvas.onpointermove = (e) => {
+                if (!cropSelecting) return;
+                const rect = cropCanvas.getBoundingClientRect();
+                const scaleX = cropCanvas.width / rect.width, scaleY = cropCanvas.height / rect.height;
+                cropEndX = (e.clientX - rect.left) * scaleX;
+                cropEndY = (e.clientY - rect.top) * scaleY;
+                drawCropBase();
+                cropCtx.strokeStyle = '#9e1b37';
+                cropCtx.lineWidth = 3;
+                cropCtx.setLineDash([6, 4]);
+                cropCtx.strokeRect(cropStartX, cropStartY, cropEndX - cropStartX, cropEndY - cropStartY);
+            };
+            cropCanvas.onpointerup = () => { cropSelecting = false; };
+        }
+
+        function cancelCrop() {
+            document.getElementById('cropModal').style.display = 'none';
+            cropSourceImage = null;
+        }
+
+        function useCropFullImage() {
+            processCroppedImage(cropSourceImage, 0, 0, cropSourceImage.naturalWidth, cropSourceImage.naturalHeight);
+        }
+
+        function confirmCrop() {
+            const x1 = Math.min(cropStartX, cropEndX) / cropScale;
+            const y1 = Math.min(cropStartY, cropEndY) / cropScale;
+            const w = Math.abs(cropEndX - cropStartX) / cropScale;
+            const h = Math.abs(cropEndY - cropStartY) / cropScale;
+            if (w < 20 || h < 20) { alert("Seleziona un'area più ampia trascinando sulla foto, oppure usa \"Foto intera\"."); return; }
+            processCroppedImage(cropSourceImage, x1, y1, w, h);
+        }
+
+        function processCroppedImage(img, sx, sy, sw, sh) {
+            const outCanvas = document.createElement('canvas');
+            outCanvas.width = sw; outCanvas.height = sh;
+            const outCtx = outCanvas.getContext('2d');
+            outCtx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+            outCanvas.toBlob(async (blob) => {
+                document.getElementById('cropModal').style.display = 'none';
+                cropSourceImage = null;
+                const result = await analyzeIngredientPhoto(blob, cropTargetStatusElId);
+                if (result) {
+                    if (result.ingredienti_testo) document.getElementById('inputIngredientiTesto').value = result.ingredienti_testo;
+                    if (result.allergeni && result.allergeni.length > 0) setSelectedAllergeni(result.allergeni);
+                }
+            }, 'image/jpeg', 0.92);
         }
 
         // --- VERIFICA INCROCIATA MENU / MAGAZZINO ---
