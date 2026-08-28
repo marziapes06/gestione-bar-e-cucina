@@ -196,7 +196,7 @@
     </style>
 </head>
 <body>
-    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v27 · 27/08 🔧</div>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v28 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
@@ -285,6 +285,19 @@
             <div class="modal-buttons">
                 <button type="button" class="btn btn-indietro" onclick="cancelStockUpdate()">← Indietro</button>
                 <button type="button" class="btn btn-stock-save" onclick="confirmStockUpdate()">Salva e Svuota</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PRODOTTO DUPLICATO -->
+    <div class="modal-overlay" id="duplicateModal">
+        <div class="modal">
+            <h3 style="color: var(--primary-dark); margin-bottom: 10px;">⚠️ Prodotto simile già presente</h3>
+            <p class="stock-update-intro">Nel magazzino c'è già un prodotto simile: <strong id="duplicateExistingName"></strong>. Cosa vuoi fare?</p>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" onclick="cancelDuplicateCheck()">Annulla</button>
+                <button type="button" class="btn btn-header-light" onclick="keepBothDuplicates()">Mantieni entrambi</button>
+                <button type="button" class="btn btn-stock-save" onclick="replaceDuplicateProduct()">Sostituisci l'esistente</button>
             </div>
         </div>
     </div>
@@ -1308,6 +1321,14 @@
 
         function closeModal() { closeScanner(); document.getElementById('productModal').style.display = 'none'; }
 
+        let pendingNewProductData = null;
+        let pendingDuplicateId = null;
+
+        function findDuplicateProduct(name) {
+            const tokensNew = normalizeTokens(name);
+            return products.find(p => tokensOverlapMatch(tokensNew, normalizeTokens(p.ingrediente)));
+        }
+
         async function saveProduct() {
             const id = document.getElementById('editItemId').value;
             const shop = getShopFieldValue();
@@ -1317,8 +1338,27 @@
             const barcode = document.getElementById('inputBarcode').value.trim();
             const ingredientiTesto = document.getElementById('inputIngredientiTesto').value.trim();
             const allergeni = getSelectedAllergeni();
+            const utilizzo = document.getElementById('inputUtilizzo').value.trim();
 
             if (!reparto || !ingrediente || isNaN(minima)) { alert("Compila i campi obbligatori!"); return; }
+
+            const data = { shop, reparto, ingrediente, minima, barcode, ingredientiTesto, allergeni, utilizzo };
+
+            if (!id) {
+                const dup = findDuplicateProduct(ingrediente);
+                if (dup) {
+                    pendingNewProductData = data;
+                    pendingDuplicateId = dup.id;
+                    document.getElementById('duplicateExistingName').textContent = dup.ingrediente;
+                    document.getElementById('duplicateModal').style.display = 'flex';
+                    return;
+                }
+            }
+            await commitProductSave(id, data);
+        }
+
+        async function commitProductSave(id, data) {
+            const { shop, reparto, ingrediente, minima, barcode, ingredientiTesto, allergeni, utilizzo } = data;
 
             if (shop && !suppliers.find(s => s.name.toLowerCase() === shop.toLowerCase())) {
                 suppliers.push({ name: shop, days: [] });
@@ -1333,18 +1373,37 @@
                 const item = products.find(p => p.id === id);
                 if (item) {
                     item.shop = shop; item.reparto = reparto; item.ingrediente = ingrediente; item.giacenza_minima = minima;
-                    item.utilizzo = document.getElementById('inputUtilizzo').value.trim();
+                    item.utilizzo = utilizzo;
                     item.barcode = barcode; item.ingredienti_testo = ingredientiTesto; item.allergeni = allergeni;
                 }
             } else {
                 products.unshift({
                     id: 'custom_' + Date.now(), shop: shop, reparto: reparto, ingrediente: ingrediente, giacenza_minima: minima, giacenza_attuale: '',
-                    utilizzo: document.getElementById('inputUtilizzo').value.trim(),
+                    utilizzo: utilizzo,
                     barcode: barcode, ingredienti_testo: ingredientiTesto, allergeni: allergeni
                 });
             }
             await saveProducts(); closeModal(); renderApp();
         }
+
+        function cancelDuplicateCheck() {
+            document.getElementById('duplicateModal').style.display = 'none';
+            pendingNewProductData = null; pendingDuplicateId = null;
+        }
+        async function keepBothDuplicates() {
+            document.getElementById('duplicateModal').style.display = 'none';
+            const data = pendingNewProductData;
+            pendingNewProductData = null; pendingDuplicateId = null;
+            await commitProductSave('', data);
+        }
+        async function replaceDuplicateProduct() {
+            document.getElementById('duplicateModal').style.display = 'none';
+            const data = pendingNewProductData;
+            const targetId = pendingDuplicateId;
+            pendingNewProductData = null; pendingDuplicateId = null;
+            await commitProductSave(targetId, data);
+        }
+
         async function deleteProduct(id) {
             if (confirm("Vuoi davvero eliminare questo prodotto?")) { products = products.filter(p => p.id !== id); await saveProducts(); renderApp(); }
         }
