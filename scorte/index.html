@@ -196,7 +196,7 @@
     </style>
 </head>
 <body>
-    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v28 · 27/08 🔧</div>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v29 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
@@ -1350,6 +1350,7 @@
                     pendingNewProductData = data;
                     pendingDuplicateId = dup.id;
                     document.getElementById('duplicateExistingName').textContent = dup.ingrediente;
+                    document.getElementById('productModal').style.display = 'none';
                     document.getElementById('duplicateModal').style.display = 'flex';
                     return;
                 }
@@ -1389,6 +1390,7 @@
         function cancelDuplicateCheck() {
             document.getElementById('duplicateModal').style.display = 'none';
             pendingNewProductData = null; pendingDuplicateId = null;
+            document.getElementById('productModal').style.display = 'flex';
         }
         async function keepBothDuplicates() {
             document.getElementById('duplicateModal').style.display = 'none';
