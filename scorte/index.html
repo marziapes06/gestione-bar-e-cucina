@@ -196,7 +196,7 @@
     </style>
 </head>
 <body>
-    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v30 · 27/08 🔧</div>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v31 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
@@ -208,6 +208,7 @@
                     <button class="btn-header" onclick="openSupplierModal()">🚚 Fornitori</button>
                     <button class="btn-header" onclick="openAddModal()">＋ Prodotto</button>
                     <button class="btn-header" onclick="openMenuCheckModal()">🔍 Verifica Menu</button>
+                    <button class="btn-header" onclick="refreshPublicMenu()">🔄 Aggiorna Menu</button>
                 </div>
             </div>
             <h2 class="gestione-scorte-title">Gestione Scorte</h2>
@@ -1359,6 +1360,11 @@
             const overlap = tokensA.filter(t => stemsB.includes(stemToken(t))).length;
             return overlap >= Math.min(tokensA.length, tokensB.length);
         }
+        async function refreshPublicMenu() {
+            await saveProducts();
+            alert("✅ Dati sincronizzati con il menu pubblico dei clienti.\n\n(In realtà il menu si aggiorna già da solo in automatico appena salvi un prodotto — questo pulsante serve solo come conferma visiva.)");
+        }
+
         function openMenuCheckModal() {
             const missing = MENU_INGREDIENTS.filter(menuIng => {
                 const menuTokens = normalizeTokens(menuIng);
