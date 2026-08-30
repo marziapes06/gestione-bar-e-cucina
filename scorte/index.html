@@ -196,7 +196,7 @@
     </style>
 </head>
 <body>
-    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v29 · 27/08 🔧</div>
+    <div style="background:#000; color:#0f0; text-align:center; font-size:16px; font-weight:900; padding:10px; letter-spacing:1px;">🔧 VERSIONE v30 · 27/08 🔧</div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
@@ -300,6 +300,13 @@
                 <button type="button" class="btn btn-stock-save" onclick="replaceDuplicateProduct()">Sostituisci l'esistente</button>
             </div>
         </div>
+    </div>
+
+    <input type="file" id="postSavePhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handlePostSavePhoto(event)">
+
+    <!-- VISUALIZZATORE FOTO A SCHERMO INTERO -->
+    <div class="modal-overlay" id="photoViewerModal" onclick="closePhotoViewer()" style="background: rgba(0,0,0,0.9);">
+        <img id="photoViewerImg" src="" style="max-width:95%; max-height:95%; border-radius:8px; object-fit:contain;">
     </div>
 
     <!-- MODAL RITAGLIO FOTO INGREDIENTI -->
@@ -410,6 +417,10 @@
                 <input type="file" id="ingredientPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleIngredientPhoto(event)">
                 <button type="button" class="btn" style="width:100%; margin-top:8px; background: var(--primary); color:white;" onclick="document.getElementById('ingredientPhotoInput').click()">📸 Fotografa lista ingredienti</button>
                 <p id="photoAnalysisStatus" style="font-size:12px; color:var(--text-muted); margin-top:6px;"></p>
+                <div id="savedIngredientPhotoWrap" style="display:none; margin-top:8px;">
+                    <p style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Foto etichetta salvata (tocca per ingrandire):</p>
+                    <img id="savedIngredientPhotoImg" src="" style="width:100%; border-radius:10px; cursor:pointer; border:1px solid var(--border);" onclick="openSavedPhotoFullscreen()">
+                </div>
             </div>
             <div class="form-group">
                 <label>Allergeni</label>
@@ -1136,31 +1147,28 @@
         }
 
         async function analyzeIngredientPhoto(file, statusElId) {
-            const statusEl = document.getElementById(statusElId);
-            statusEl.style.color = 'var(--text-muted)';
-            statusEl.textContent = '⏳ Leggo il testo dalla foto (gratuito, può richiedere qualche secondo)...';
+            const statusEl = statusElId ? document.getElementById(statusElId) : null;
+            const setStatus = (color, text) => { if (statusEl) { statusEl.style.color = color; statusEl.textContent = text; } };
+            setStatus('var(--text-muted)', '⏳ Leggo il testo dalla foto (gratuito, può richiedere qualche secondo)...');
             try {
                 const result = await Tesseract.recognize(file, 'ita', {
                     logger: m => {
                         if (m.status === 'recognizing text') {
-                            statusEl.textContent = `⏳ Leggo il testo... ${Math.round(m.progress * 100)}%`;
+                            setStatus('var(--text-muted)', `⏳ Leggo il testo... ${Math.round(m.progress * 100)}%`);
                         }
                     }
                 });
                 const cleanText = result.data.text.replace(/\s+/g, ' ').trim();
                 if (!cleanText || cleanText.length < 5) {
-                    statusEl.style.color = 'var(--urgent)';
-                    statusEl.textContent = '❌ Non riesco a leggere testo in questa foto. Riprova con più luce, più vicino, e assicurati che il testo sia a fuoco.';
+                    setStatus('var(--urgent)', '❌ Non riesco a leggere testo in questa foto. Riprova con più luce, più vicino, e assicurati che il testo sia a fuoco.');
                     return null;
                 }
                 const allergeniTrovati = detectAllergensFromText(cleanText);
-                statusEl.style.color = 'var(--success)';
-                statusEl.textContent = '✅ Testo letto dalla foto — CONTROLLA CON ATTENZIONE (la lettura gratuita può contenere errori di battitura) e correggi se serve prima di salvare.';
+                setStatus('var(--success)', '✅ Testo letto dalla foto — CONTROLLA CON ATTENZIONE (la lettura gratuita può contenere errori di battitura) e correggi se serve prima di salvare.');
                 return { ingredienti_testo: cleanText, allergeni: allergeniTrovati };
             } catch (e) {
                 console.error('Errore OCR foto ingredienti:', e);
-                statusEl.style.color = 'var(--urgent)';
-                statusEl.textContent = '❌ Errore durante la lettura della foto: ' + e.message + '. Riprova, oppure inserisci gli ingredienti a mano.';
+                setStatus('var(--urgent)', '❌ Errore durante la lettura della foto: ' + e.message + '. Riprova, oppure inserisci gli ingredienti a mano.');
                 return null;
             }
         }
@@ -1170,11 +1178,11 @@
         let cropCanvas = null, cropCtx = null;
         let cropSelecting = false, cropStartX = 0, cropStartY = 0, cropEndX = 0, cropEndY = 0;
         let cropScale = 1;
-        let cropTargetStatusElId = 'photoAnalysisStatus';
+        let cropResultCallback = null; // funzione chiamata con il blob ritagliato, diversa a seconda del contesto
+        let pendingIngredientPhotoBase64 = null; // foto compressa in attesa di essere salvata col prodotto
+        let photoTargetProductId = null; // usato nel flusso post-salvataggio
 
-        function handleIngredientPhoto(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        function loadImageForCrop(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
                 cropSourceImage = new Image();
@@ -1182,6 +1190,74 @@
                 cropSourceImage.src = e.target.result;
             };
             reader.readAsDataURL(file);
+        }
+
+        function compressImageToBase64(blob, maxDim = 700, quality = 0.6) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.naturalWidth, h = img.naturalHeight;
+                    if (w > h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+                    else if (h >= w && h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                    URL.revokeObjectURL(img.src);
+                };
+                img.src = URL.createObjectURL(blob);
+            });
+        }
+
+        // Flusso normale: foto scattata dentro il modulo prodotto
+        function handleIngredientPhoto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            cropResultCallback = async (blob) => {
+                const [result, photoBase64] = await Promise.all([
+                    analyzeIngredientPhoto(blob, 'photoAnalysisStatus'),
+                    compressImageToBase64(blob)
+                ]);
+                pendingIngredientPhotoBase64 = photoBase64;
+                if (result) {
+                    if (result.ingredienti_testo) document.getElementById('inputIngredientiTesto').value = result.ingredienti_testo;
+                    if (result.allergeni && result.allergeni.length > 0) setSelectedAllergeni(result.allergeni);
+                }
+            };
+            loadImageForCrop(file);
+            event.target.value = '';
+        }
+
+        // Flusso proposto in automatico dopo il salvataggio, se non erano stati trovati ingredienti/allergeni
+        function promptPhotoForProduct(productId) {
+            photoTargetProductId = productId;
+            if (confirm("Non ho trovato ingredienti/allergeni per questo prodotto (né dal codice a barre né da altre fonti). Vuoi fotografare subito la lista ingredienti dalla confezione?")) {
+                document.getElementById('postSavePhotoInput').click();
+            } else {
+                photoTargetProductId = null;
+            }
+        }
+        function handlePostSavePhoto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            cropResultCallback = async (blob) => {
+                const targetId = photoTargetProductId;
+                photoTargetProductId = null;
+                const [result, photoBase64] = await Promise.all([
+                    analyzeIngredientPhoto(blob, null),
+                    compressImageToBase64(blob)
+                ]);
+                const item = products.find(p => p.id === targetId);
+                if (item) {
+                    if (result && result.ingredienti_testo) item.ingredienti_testo = result.ingredienti_testo;
+                    if (result && result.allergeni && result.allergeni.length > 0) item.allergeni = result.allergeni;
+                    item.foto_ingredienti = photoBase64;
+                    await saveProducts();
+                    renderApp();
+                    alert(result ? "✅ Ingredienti e allergeni aggiornati sul prodotto." : "Foto salvata sul prodotto, ma non sono riuscito a leggere il testo — puoi modificarla a mano aprendo la scheda del prodotto.");
+                }
+            };
+            loadImageForCrop(file);
             event.target.value = '';
         }
 
@@ -1229,6 +1305,8 @@
         function cancelCrop() {
             document.getElementById('cropModal').style.display = 'none';
             cropSourceImage = null;
+            cropResultCallback = null;
+            photoTargetProductId = null;
         }
 
         function useCropFullImage() {
@@ -1252,12 +1330,19 @@
             outCanvas.toBlob(async (blob) => {
                 document.getElementById('cropModal').style.display = 'none';
                 cropSourceImage = null;
-                const result = await analyzeIngredientPhoto(blob, cropTargetStatusElId);
-                if (result) {
-                    if (result.ingredienti_testo) document.getElementById('inputIngredientiTesto').value = result.ingredienti_testo;
-                    if (result.allergeni && result.allergeni.length > 0) setSelectedAllergeni(result.allergeni);
-                }
+                const callback = cropResultCallback;
+                cropResultCallback = null;
+                if (callback) await callback(blob);
             }, 'image/jpeg', 0.92);
+        }
+
+        // --- FOTO SALVATA: VISUALIZZAZIONE NELLA SCHEDA PRODOTTO ---
+        function openSavedPhotoFullscreen() {
+            document.getElementById('photoViewerImg').src = document.getElementById('savedIngredientPhotoImg').src;
+            document.getElementById('photoViewerModal').style.display = 'flex';
+        }
+        function closePhotoViewer() {
+            document.getElementById('photoViewerModal').style.display = 'none';
         }
 
         // --- VERIFICA INCROCIATA MENU / MAGAZZINO ---
@@ -1299,6 +1384,8 @@
             document.getElementById('inputMinima').value = ''; document.getElementById('inputUtilizzo').value = '';
             document.getElementById('inputBarcode').value = ''; document.getElementById('inputIngredientiTesto').value = '';
             document.getElementById('photoAnalysisStatus').textContent = '';
+            document.getElementById('savedIngredientPhotoWrap').style.display = 'none';
+            pendingIngredientPhotoBase64 = null;
             setSelectedAllergeni([]);
             document.getElementById('modalTitle').textContent = '＋ Nuovo Prodotto';
             document.getElementById('productModal').style.display = 'flex';
@@ -1314,6 +1401,13 @@
             document.getElementById('inputBarcode').value = item.barcode || '';
             document.getElementById('inputIngredientiTesto').value = item.ingredienti_testo || '';
             document.getElementById('photoAnalysisStatus').textContent = '';
+            pendingIngredientPhotoBase64 = null;
+            if (item.foto_ingredienti) {
+                document.getElementById('savedIngredientPhotoImg').src = item.foto_ingredienti;
+                document.getElementById('savedIngredientPhotoWrap').style.display = 'block';
+            } else {
+                document.getElementById('savedIngredientPhotoWrap').style.display = 'none';
+            }
             setSelectedAllergeni(item.allergeni || []);
             document.getElementById('modalTitle').textContent = '✏️ Modifica Prodotto';
             document.getElementById('productModal').style.display = 'flex';
@@ -1360,6 +1454,8 @@
 
         async function commitProductSave(id, data) {
             const { shop, reparto, ingrediente, minima, barcode, ingredientiTesto, allergeni, utilizzo } = data;
+            const photoBase64 = pendingIngredientPhotoBase64;
+            pendingIngredientPhotoBase64 = null;
 
             if (shop && !suppliers.find(s => s.name.toLowerCase() === shop.toLowerCase())) {
                 suppliers.push({ name: shop, days: [] });
@@ -1370,21 +1466,29 @@
                 await saveReparti();
             }
 
+            let finalId = id;
             if (id) {
                 const item = products.find(p => p.id === id);
                 if (item) {
                     item.shop = shop; item.reparto = reparto; item.ingrediente = ingrediente; item.giacenza_minima = minima;
                     item.utilizzo = utilizzo;
                     item.barcode = barcode; item.ingredienti_testo = ingredientiTesto; item.allergeni = allergeni;
+                    if (photoBase64) item.foto_ingredienti = photoBase64;
                 }
             } else {
+                finalId = 'custom_' + Date.now();
                 products.unshift({
-                    id: 'custom_' + Date.now(), shop: shop, reparto: reparto, ingrediente: ingrediente, giacenza_minima: minima, giacenza_attuale: '',
+                    id: finalId, shop: shop, reparto: reparto, ingrediente: ingrediente, giacenza_minima: minima, giacenza_attuale: '',
                     utilizzo: utilizzo,
-                    barcode: barcode, ingredienti_testo: ingredientiTesto, allergeni: allergeni
+                    barcode: barcode, ingredienti_testo: ingredientiTesto, allergeni: allergeni,
+                    foto_ingredienti: photoBase64 || ''
                 });
             }
             await saveProducts(); closeModal(); renderApp();
+
+            if (!ingredientiTesto && (!allergeni || allergeni.length === 0)) {
+                promptPhotoForProduct(finalId);
+            }
         }
 
         function cancelDuplicateCheck() {
